@@ -1,0 +1,42 @@
+{
+    "name": "mercator/wn-localfonts-plugin",
+    "type": "winter-plugin",
+    "description": "Localize Google, Bunny, and Fontshare fonts for WinterCMS",
+    "homepage": "https://github.com/helmutkaufmann/wn-localfonts-plugin",
+    "keywords": [
+        "winter cms",
+        "winter",
+        "plugin",
+        "fonts",
+        "localization"
+    ],
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Helmut Kaufmann",
+            "email": "software@mercator.li",
+            "role": "Original Author"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/helmutkaufmann/wn-localfonts-plugin/issues",
+        "source": "https://github.com/helmutkaufmann/wn-localfonts-plugin"
+    },
+    "require": {
+        "php": ">=8.2",
+        "winter/storm": ">=1.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Mercator\\LocalFonts\\": ""
+        }
+    },
+    "extra": {
+        "installer-name": "localfonts",
+        "winter": {
+            "name": "Mercator.LocalFonts",
+            "icon": "icon-font",
+            "homepage": "https://github.com/mercator/wn-localfonts-plugin"
+        }
+    }
+}
