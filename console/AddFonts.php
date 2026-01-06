@@ -9,6 +9,14 @@ class AddFonts extends BaseCommand
     protected $name = 'localfonts:add';
     protected $signature = 'localfonts:add {font} {--force} {--dir=} {--full}';
 
+    protected $fontRegex = [
+        'blocks' => '/(?:\/\*\s*(.*?)\s*\*\/)?\s*@font-face\s*{(.*?)}/s',
+        'family' => '/font-family:\s*([^;]+);/',
+        'url'    => '/url\(([^)]+)\)/',
+        'weight' => '/font-weight:\s*([^;]+);/',
+        'style'  => '/font-style:\s*([^;]+);/',
+    ];
+
     public function handle()
     {
         try {
@@ -21,10 +29,18 @@ class AddFonts extends BaseCommand
 
             foreach ($urls as $source => $url) {
                 $this->line("Searching $source...");
-                $res = Http::get($url, function($http) {
-                    $http->setOption(CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                    $http->setOption(CURLOPT_FOLLOWLOCATION, true);
-                });
+                
+                $res = $this->fetchCss($url);
+
+                // Fallback: If --full failed on this specific provider, try the simple version 
+                // before giving up on the provider entirely.
+                if (($res->code !== 200 || !str_contains($res->body, '@font-face')) && $this->option('full')) {
+                    $fallbackUrl = $this->getFallbackUrl($source, $input);
+                    if ($fallbackUrl) {
+                        $this->line(" - $source full set not found, trying basic...");
+                        $res = $this->fetchCss($fallbackUrl);
+                    }
+                }
 
                 if ($res->code === 200 && str_contains($res->body, '@font-face')) {
                     $response = $res;
@@ -43,7 +59,6 @@ class AddFonts extends BaseCommand
                 $rawComment = !empty($matches[1][$index]) ? trim($matches[1][$index]) : 'all';
                 $subset = strtolower($rawComment);
                 
-                // Smart Filtering: Allow if subset is 'all', matches .env preference, or matches font name
                 $isAllowed = empty($preferredSubsets) || 
                              $subset === 'all' || 
                              in_array($subset, array_map('strtolower', $preferredSubsets)) ||
@@ -57,7 +72,7 @@ class AddFonts extends BaseCommand
                 if (!$f || !$u) continue;
 
                 $family = trim($f[1], "'\"");
-                $fontUrl = $u[1];
+                $fontUrl = trim($u[1], "'\"");
 
                 if (str_starts_with($fontUrl, '//')) $fontUrl = "https:" . $fontUrl;
                 elseif (str_starts_with($fontUrl, './')) $fontUrl = "https://cdn.fontshare.com" . ltrim($fontUrl, '.');
@@ -90,11 +105,33 @@ class AddFonts extends BaseCommand
         } catch (\Exception $e) { $this->error($e->getMessage()); }
     }
 
+    protected function fetchCss($url)
+    {
+        return Http::get($url, function($http) {
+            $http->setOption(CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            $http->setOption(CURLOPT_FOLLOWLOCATION, true);
+        });
+    }
+
+    protected function getFallbackUrl($source, $input)
+    {
+        $slug = strtolower(str_replace(' ', '-', $input));
+        $plus = str_replace(' ', '+', $input);
+
+        return match ($source) {
+            'Google' => "https://fonts.googleapis.com/css2?family={$plus}&display=swap",
+            'Bunny' => "https://fonts.bunny.net/css?family={$slug}&display=swap",
+            'Fontshare' => "https://api.fontshare.com/v2/css?f[]={$slug}@400,401&display=swap",
+            default => null
+        };
+    }
+
     protected function getDiscoveryUrls($input, $full = false)
     {
         if (filter_var($input, FILTER_VALIDATE_URL)) return ['Direct' => $input];
         $slug = strtolower(str_replace(' ', '-', $input));
         $plus = str_replace(' ', '+', $input);
+        
         return [
             'Google' => $full ? "https://fonts.googleapis.com/css2?family={$plus}:ital,wght@0,100..900;1,100..900&display=swap" : "https://fonts.googleapis.com/css2?family={$plus}&display=swap",
             'Bunny' => "https://fonts.bunny.net/css?family={$slug}" . ($full ? ":italic,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900" : "") . "&display=swap",
